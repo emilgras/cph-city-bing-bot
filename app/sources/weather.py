@@ -11,7 +11,15 @@ EMOJI = {
     "Snow": "❄️",
 }
 
-async def fetch_week_forecast(api_key: str, lat=55.6761, lon=12.5683, tz=ZoneInfo("Europe/Copenhagen")):
+async def fetch_week_forecast(api_key: str | None, lat=55.6761, lon=12.5683, tz=ZoneInfo("Europe/Copenhagen")):
+    if not api_key:
+        # Simpelt fake forecast
+        return [
+            {"label": "Man", "icon": "☀️", "tmax": 20},
+            {"label": "Tir", "icon": "🌧️", "tmax": 16},
+            {"label": "Ons", "icon": "☁️", "tmax": 18},
+            {"label": "Tor", "icon": "🌞", "tmax": 22},
+        ]
     url = "https://api.openweathermap.org/data/2.5/forecast"
     params = {"lat": lat, "lon": lon, "appid": api_key, "units": "metric", "lang": "da"}
     async with httpx.AsyncClient(timeout=20) as client:

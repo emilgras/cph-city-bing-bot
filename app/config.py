@@ -1,10 +1,14 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import ClassVar, List
 from zoneinfo import ZoneInfo
 
 @dataclass
 class Config:
-    tz = ZoneInfo(os.getenv("TZ", "Europe/Copenhagen"))
+    # Ikke et dataclass-felt (skal ikke i __init__)
+    tz: ClassVar[ZoneInfo] = ZoneInfo(os.getenv("TZ", "Europe/Copenhagen"))
+
+    # Forbindelser / nøgler
     redis_url: str = os.environ["REDIS_URL"]
     owm_key: str = os.environ["OPENWEATHER_API_KEY"]
 
@@ -18,8 +22,12 @@ class Config:
     twilio_token: str = os.environ["TWILIO_AUTH_TOKEN"]
     twilio_from: str = os.environ["TWILIO_FROM_NUMBER"]
 
-    recipients: list[str] = os.getenv("RECIPIENT_NUMBERS", "").split(",")
+    # Brug default_factory til muterbare defaults
+    recipients: List[str] = field(
+        default_factory=lambda: os.getenv("RECIPIENT_NUMBERS", "").split(",")
+    )
 
+    # Planlægningsparametre
     send_dow: int = int(os.getenv("SEND_DAY_OF_WEEK", "6"))
     send_hour: int = int(os.getenv("SEND_HOUR_LOCAL", "10"))
     interval_days: int = int(os.getenv("SEND_INTERVAL_DAYS", "7"))
