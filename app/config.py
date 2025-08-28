@@ -10,9 +10,10 @@ class Config:
     # Persistence
     redis_url: str = os.environ["REDIS_URL"]
 
-    # Azure AI Foundry Agent (Bing-grounded)
-    agent_endpoint: str = os.environ["AGENT_ENDPOINT"]
-    agent_api_key: str = os.environ["AGENT_API_KEY"]
+    # Azure AI Foundry Agents (threads/runs)
+    agent_project_endpoint: str = os.environ["AGENT_PROJECT_ENDPOINT"]  # .../api/projects/<name>
+    agent_api_version: str = os.getenv("AGENT_API_VERSION", "2025-05-01")
+    agent_bearer_token: str = os.environ["AGENT_BEARER_TOKEN"]
     agent_id: str = os.environ["AGENT_ID"]
 
     # Twilio

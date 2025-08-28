@@ -1,46 +1,46 @@
 from __future__ import annotations
-import httpx, json, re
+import json, re
 from datetime import datetime
 from ..config import Config
 from ..dateutil_dk import labels_until_next_sunday
+from .agents_client import create_thread, post_message, run_thread, poll_run, get_messages
 
-class AgentError(Exception): pass
 class AgentDataError(Exception): pass
 
-async def ask_agent(endpoint: str, api_key: str, agent_id: str, query: str, timeout: float = 25.0) -> str:
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"messages": [{"role": "user", "content": query}]}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.post(f"{endpoint.rstrip('/')}/agents/{agent_id}/chat/completions",
-                              headers=headers, json=payload)
-        if r.status_code == 401:
-            raise AgentError("Unauthorized – check AGENT_API_KEY/permissions")
-        if r.status_code == 404:
-            raise AgentError("Agent not found – check AGENT_ENDPOINT/AGENT_ID")
-        r.raise_for_status()
-        data = r.json()
+def _extract_json_from_messages(msgs: list[dict]) -> dict:
+    # Find latest assistant message and collect text parts
+    assistant_msgs = [m for m in msgs if m.get("role") == "assistant"]
+    if not assistant_msgs:
+        return {}
+    content_text = ""
+    # Many Foundry responses have "content": [{"text": "..."}]
+    for part in assistant_msgs[0].get("content", []):
+        if isinstance(part, dict):
+            text = part.get("text") or part.get("content") or ""
+        else:
+            text = str(part)
+        content_text += (text or "")
+    # Try parsing JSON
     try:
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        raise AgentError(f"Unexpected agent response: {e}")
-
-def _extract_json(text: str) -> dict:
-    try:
-        return json.loads(text)
+        return json.loads(content_text)
     except Exception:
         pass
-    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.S | re.I)
+    m = re.search(r"```json\s*(\{.*?\})\s*```", content_text, re.S | re.I)
     if m:
-        try: return json.loads(m.group(1))
-        except Exception: pass
-    m = re.search(r"(\{.*\})", text, re.S)
+        try:
+            return json.loads(m.group(1))
+        except Exception:
+            pass
+    m = re.search(r"(\{.*\})", content_text, re.S)
     if m:
-        try: return json.loads(m.group(1))
-        except Exception: pass
+        try:
+            return json.loads(m.group(1))
+        except Exception:
+            pass
     return {}
 
-async def find_intro_weather_events(endpoint: str, api_key: str, agent_id: str):
-    """One agent call → (intro, forecast[], events[], signoff). Strict: forecast must cover today→Sunday."""
+async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]:
+    """One Agent call via Foundry (threads/runs). Strict: forecast must cover today→Sunday."""
     now = datetime.now(tz=Config.tz)
     labels = labels_until_next_sunday(now)
     prefs  = Config.event_preferences
@@ -64,8 +64,19 @@ async def find_intro_weather_events(endpoint: str, api_key: str, agent_id: str):
         "Ingen forklaringer, ingen markdown – KUN JSON."
     )
 
-    text = await ask_agent(endpoint, api_key, agent_id, prompt)
-    data = _extract_json(text) or {}
+    base = Config.agent_project_endpoint
+    ver  = Config.agent_api_version
+    tok  = Config.agent_bearer_token
+    aid  = Config.agent_id
+
+    thread_id = await create_thread(base, ver, tok)
+    await post_message(base, ver, tok, thread_id, "user", prompt)
+    run_id = await run_thread(base, ver, tok, thread_id, aid)
+    run_state = await poll_run(base, ver, tok, thread_id, run_id)
+    if run_state.get("status") != "completed":
+        raise AgentDataError(f"Run status: {run_state.get('status')}")
+    msgs = await get_messages(base, ver, tok, thread_id)
+    data = _extract_json_from_messages(msgs) or {}
 
     intro = (data.get("intro") or "").strip()
     signoff = (data.get("signoff") or "— din Københavner-bot ☁️").strip()
@@ -75,9 +86,9 @@ async def find_intro_weather_events(endpoint: str, api_key: str, agent_id: str):
     seen = set()
     forecast = []
     for d in (data.get("forecast") or []):
-        lab = str(d.get("label","")).strip()
+        lab = str(d.get("label", "")).strip()
         if lab in want and lab not in seen:
-            icon = (str(d.get("icon","")).strip() or "🌤️")
+            icon = (str(d.get("icon", "")).strip() or "🌤️")
             try:
                 tmax = int(d.get("tmax", 20))
             except Exception:

@@ -8,7 +8,7 @@ EVERGREEN = [
 ]
 
 def pick_by_weather(ideas, forecast):
-    # Simple bias: if majority is bad weather → prefer "indoor-ish" items (guessing by title)
+    # Simple bias: if majority is bad weather → prefer indoor-ish items
     bad = sum(1 for d in forecast if d["icon"] in ("🌧️","🌦️","☁️"))
     prefer_indoor = bad >= len(forecast)/2
     def is_indoor(x):

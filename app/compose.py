@@ -32,9 +32,7 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
     return "\n".join(lines)[:MAX_CHARS]
 
 async def build_message(welcome=False):
-    intro, forecast, events, signoff = await find_intro_weather_events(
-        Config.agent_endpoint, Config.agent_api_key, Config.agent_id
-    )
+    intro, forecast, events, signoff = await find_intro_weather_events()
 
     pool = (events or []) + EVERGREEN
     ideas = pick_by_weather(pool, forecast)
