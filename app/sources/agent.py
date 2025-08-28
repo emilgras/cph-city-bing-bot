@@ -60,34 +60,56 @@ def _safe_json_loads(s: str) -> dict:
 
 
 def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) -> dict:
-    """Find seneste assistant-besked og parse JSON – med detaljeret logging."""
+    """Find seneste assistant-besked og parse JSON – robust mod nested shapes."""
     log.debug("Extracting JSON from messages: %d message(s)", len(msgs))
+
+    def _flatten_text(obj) -> str:
+        # Recursively collect all string-like bits from API "content" structures
+        if obj is None:
+            return ""
+        if isinstance(obj, str):
+            return obj
+        if isinstance(obj, (int, float, bool)):
+            return str(obj)
+        if isinstance(obj, list):
+            return "".join(_flatten_text(x) for x in obj)
+        if isinstance(obj, dict):
+            # Prefer common keys first
+            for k in ("text", "value", "input_text"):
+                v = obj.get(k)
+                if isinstance(v, str):
+                    return v
+            # If "content" is a list (common in many APIs), flatten it
+            v = obj.get("content")
+            if isinstance(v, list):
+                return "".join(_flatten_text(x) for x in v)
+            if isinstance(v, str):
+                return v
+            # Generic fallback: flatten all values
+            return "".join(_flatten_text(x) for x in obj.values())
+        # Fallback: stringize
+        return str(obj)
 
     assistant_msgs = [m for m in msgs if m.get("role") == "assistant"]
     if not assistant_msgs:
         log.warning("No assistant messages found")
         return {}
 
-    # I praksis giver Foundry seneste øverst; vi bruger første.
-    content = assistant_msgs[0].get("content", [])
-    parts_count = len(content) if isinstance(content, list) else 1
-    log.debug("Assistant content parts: %s", parts_count)
+    # Foundry often returns newest first; we use the first assistant message.
+    raw_content = assistant_msgs[0].get("content", [])
+    content_text = _flatten_text(raw_content)
 
-    content_text = ""
-    for part in (content if isinstance(content, list) else [content]):
-        if isinstance(part, dict):
-            text = part.get("text") or part.get("content") or ""
-        else:
-            text = str(part)
-        content_text += (text or "")
+    if not content_text:
+        log.error("Assistant content empty or unrecognized shape: %r", type(raw_content).__name__)
+        return {}
 
-    # Først: direkte JSON
+    # 1) Direkt JSON
     data = _safe_json_loads(content_text)
     if data:
         log.debug("Parsed JSON (direct) with keys: %s", list(data.keys()))
         return data
 
-    # Derpå: fenced code block ```json {...}
+    # 2) Fenced ```json ... ```
     m = re.search(r"```json\s*(\{.*?\})\s*```", content_text, re.S | re.I)
     if m:
         data = _safe_json_loads(m.group(1))
@@ -95,7 +117,7 @@ def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) ->
             log.debug("Parsed JSON (fenced block) with keys: %s", list(data.keys()))
             return data
 
-    # Sidst: fang første {...}
+    # 3) Første {...} blob
     m = re.search(r"(\{.*\})", content_text, re.S)
     if m:
         data = _safe_json_loads(m.group(1))
@@ -103,11 +125,9 @@ def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) ->
             log.debug("Parsed JSON (loose braces) with keys: %s", list(data.keys()))
             return data
 
-    log.error(
-        "Failed to parse assistant output as JSON; first 200 chars: %r",
-        content_text[:200],
-    )
+    log.error("Failed to parse assistant output as JSON; first 200 chars: %r", content_text[:200])
     return {}
+
 
 
 # --- Rate-limit helper -------------------------------------------------------
