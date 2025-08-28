@@ -13,7 +13,6 @@ def _extract_json_from_messages(msgs: list[dict]) -> dict:
     if not assistant_msgs:
         return {}
     content_text = ""
-    # Many Foundry responses have "content": [{"text": "..."}]
     for part in assistant_msgs[0].get("content", []):
         if isinstance(part, dict):
             text = part.get("text") or part.get("content") or ""
@@ -64,18 +63,13 @@ async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]
         "Ingen forklaringer, ingen markdown – KUN JSON."
     )
 
-    base = Config.agent_project_endpoint
-    ver  = Config.agent_api_version
-    tok  = Config.agent_bearer_token
-    aid  = Config.agent_id
-
-    thread_id = await create_thread(base, ver, tok)
-    await post_message(base, ver, tok, thread_id, "user", prompt)
-    run_id = await run_thread(base, ver, tok, thread_id, aid)
-    run_state = await poll_run(base, ver, tok, thread_id, run_id)
+    thread_id = await create_thread()
+    await post_message(thread_id, "user", prompt)
+    run_id = await run_thread(thread_id)
+    run_state = await poll_run(thread_id, run_id)
     if run_state.get("status") != "completed":
         raise AgentDataError(f"Run status: {run_state.get('status')}")
-    msgs = await get_messages(base, ver, tok, thread_id)
+    msgs = await get_messages(thread_id)
     data = _extract_json_from_messages(msgs) or {}
 
     intro = (data.get("intro") or "").strip()
