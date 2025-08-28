@@ -5,7 +5,7 @@ from .config import Config
 r = redis.Redis.from_url(Config.redis_url, decode_responses=True)
 
 KEYS = {
-    "welcome": "cphbot:velkomst_sent",
+    "welcome": "cphbot:welcome_sent",
     "first": "cphbot:first_suggestion_sent",
     "last": "cphbot:last_sent_at",
 }
