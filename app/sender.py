@@ -2,24 +2,27 @@ from twilio.rest import Client
 from .config import Config
 import time
 
-client = Client(Config.twilio_sid, Config.twilio_token)
+# One global instance of Config
+_cfg = Config()
+
+client = Client(_cfg.twilio_sid, _cfg.twilio_token)
 
 def send_sms(body: str):
-    recipients = [s.strip() for s in (Config.recipients or []) if s.strip()]
+    recipients = [s.strip() for s in (_cfg.recipients or []) if s.strip()]
     if not recipients:
         print("[SMS] No recipients configured")
         return
 
     for to in recipients:
-        if Config.dry_run:
+        if _cfg.dry_run:
             print(f"[DRY_RUN] → {to}: {body}")
             continue
 
         # Send the SMS
-        msg = client.messages.create(to=to, from_=Config.twilio_from, body=body)
+        msg = client.messages.create(to=to, from_=_cfg.twilio_from, body=body)
         print(f"[SMS] sent to {to} sid={msg.sid} initial_status={msg.status}")
 
-        # Wait a couple of seconds and fetch the final status
+        # Wait a few seconds and fetch the status from Twilio
         time.sleep(3)
         m = client.messages(msg.sid).fetch()
         print(
