@@ -23,8 +23,10 @@ logger = logging.getLogger(LOGGER_NAME)
 #     format="%(asctime)s %(levelname)s %(name)s [corr=%(correlation_id)s] %(message)s",
 # )
 
+
 class _ContextFilter(logging.Filter):
     """Inject correlation_id into all log records (fallback: '-')."""
+
     def __init__(self, correlation_id: str | None):
         super().__init__()
         self.correlation_id = correlation_id or "-"
@@ -42,17 +44,20 @@ def _with_corr_logger(correlation_id: str | None = None) -> logging.LoggerAdapte
 
 # --- Errors ------------------------------------------------------------------
 
+
 class AgentDataError(Exception):
     pass
 
 
 # --- Helpers -----------------------------------------------------------------
 
+
 def _safe_json_loads(s: str) -> dict:
     try:
         return json.loads(s)
     except Exception:
         return {}
+
 
 def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) -> dict:
     """Find seneste assistant-besked og parse JSON – med detaljeret logging."""
@@ -98,8 +103,83 @@ def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) ->
             log.debug("Parsed JSON (loose braces) with keys: %s", list(data.keys()))
             return data
 
-    log.error("Failed to parse assistant output as JSON; first 200 chars: %r", content_text[:200])
+    log.error(
+        "Failed to parse assistant output as JSON; first 200 chars: %r",
+        content_text[:200],
+    )
     return {}
+
+
+# --- Rate-limit helper -------------------------------------------------------
+
+_RATE_HINT = re.compile(r"(\d+)\s*seconds", re.I)
+
+
+def _retry_wait_seconds(msg: str, fallback: float = 20.0) -> float:
+    """Parse 'Try again in N seconds' fra last_error.message."""
+    m = _RATE_HINT.search(msg or "")
+    return float(m.group(1)) if m else fallback
+
+
+async def run_thread_with_retry(
+    thread_id: str,
+    *,
+    max_attempts: int = 5,
+    initial_wait: float = 20.0,
+    escalate_step: float = 10.0,
+    max_wait: float = 90.0,
+    poll_interval: float = 2.0,
+    poll_timeout: float = 180.0,
+    log: logging.LoggerAdapter | None = None,
+) -> dict:
+    """
+    Starter run og poller til completed. Ved rate_limit_exceeded:
+    - venter (hint fra serveren, ellers initial_wait)
+    - eskalerer ventetid ved gentagne fejl
+    - starter ET NYT run på SAMME thread
+    """
+    log = log or _with_corr_logger("-")
+    wait = 0.0
+    for attempt in range(1, max_attempts + 1):
+        if wait > 0:
+            log.warning(
+                "[AGENT] retry: sleeping %.1fs (attempt %d/%d)",
+                wait,
+                attempt,
+                max_attempts,
+            )
+            await asyncio.sleep(wait)
+
+        log.info("[AGENT] run=start (attempt %d/%d) thread=%s", attempt, max_attempts, thread_id)
+        run_id = await run_thread(thread_id)
+        log.info("[AGENT] calling threads/runs … run_id=%s", run_id)
+
+        state = await poll_run(thread_id, run_id, interval=poll_interval, timeout=poll_timeout)
+        status = state.get("status")
+        err = (state.get("last_error") or {})
+        code = err.get("code")
+        msg = (err.get("message") or "")
+
+        log.info("[AGENT] run=finished status=%s", status)
+
+        if status == "completed":
+            return state
+
+        if status == "requires_action":
+            log.error("[AGENT] run requires_action men der er ingen tool-håndtering implementeret")
+            raise AgentDataError("Run requires_action (tool not handled)")
+
+        if status == "failed" and code == "rate_limit_exceeded":
+            hint = _retry_wait_seconds(msg, fallback=initial_wait)
+            wait = min(max_wait, hint + (attempt - 1) * escalate_step)
+            log.warning("[AGENT] rate_limit_exceeded: %r → wait=%.1fs", msg, wait)
+            continue
+
+        # Andre fejl → stop
+        log.error("[AGENT] failed: status=%s code=%s msg=%r", status, code, msg)
+        raise AgentDataError(f"Run failed: status={status}, code={code}, msg={msg}")
+
+    raise AgentDataError("Gav op efter gentagne rate limits")
 
 
 # --- Main flow ---------------------------------------------------------------
@@ -150,35 +230,26 @@ async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]
     await post_message(thread_id, "user", prompt)
     log.info("User message posted (%.3fs)", time.perf_counter() - t)
 
-    # 3) Run the thread
+    # 3) Run the thread (med retry/backoff ved ratelimit)
     t = time.perf_counter()
-    run_id = await run_thread(thread_id)
-    log.info("Run started: %s (%.3fs)", run_id, time.perf_counter() - t)
-
-    # 4) Poll run status
-    t = time.perf_counter()
-    run_state = await poll_run(thread_id, run_id)
-    log.info(
-        "Run finished with status=%s (%.3fs)",
-        run_state.get("status"),
-        time.perf_counter() - t,
-    )
+    run_state = await run_thread_with_retry(thread_id, log=log)
+    log.info("Run finished with status=%s (%.3fs)", run_state.get("status"), time.perf_counter() - t)
 
     if run_state.get("status") != "completed":
         log.error("Run not completed. State: %s", json.dumps(run_state)[:500])
         raise AgentDataError(f"Run status: {run_state.get('status')}")
 
-    # 5) Fetch messages
+    # 4) Fetch messages
     t = time.perf_counter()
     msgs = await get_messages(thread_id)
     log.info("Fetched %d message(s) (%.3fs)", len(msgs or []), time.perf_counter() - t)
 
-    # 6) Parse JSON
+    # 5) Parse JSON
     data = _extract_json_from_messages(msgs or [], log) or {}
     if not data:
         raise AgentDataError("Assistant did not return valid JSON")
 
-    # 7) Validate & normalize data
+    # 6) Validate & normalize data
     intro = (data.get("intro") or "").strip()
     signoff = (data.get("signoff") or "— din Københavner-bot ☁️").strip()
 
@@ -213,7 +284,7 @@ async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]
         else:
             log.debug("Skipping event without title: %r", e)
 
-    # 8) Done
+    # 7) Done
     log.info(
         "Success: intro=%s chars, forecast=%d, events=%d, signoff=%s chars (total %.3fs)",
         len(intro),
