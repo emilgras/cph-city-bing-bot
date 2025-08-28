@@ -136,11 +136,11 @@ def main() -> int:
 
     try:
         body = format_sms(
-            intro= intro,
-            forecast= fc,
-            events= pick_by_weather((ev or []) + EVERGREEN, fc),
-            signoff= signoff,
-            welcome= args.welcome
+            intro=intro,
+            forecast=fc,
+            ideas=pick_by_weather((ev or []) + EVERGREEN, fc),  # <-- change 'events=' to 'ideas='
+            signoff=signoff,
+            welcome=args.welcome,
         )
         maybe_send_sms(body, args.send)
     except Exception as e:
