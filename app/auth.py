@@ -3,7 +3,7 @@ import os, time, httpx
 from .config import Config
 
 class AzureTokenProvider:
-    def __init__(self, tenant: str, client_id: str, client_secret: str, scope: str = "hhttps://ai.azure.com/.default"):
+    def __init__(self, tenant: str, client_id: str, client_secret: str, scope: str = "https://ai.azure.com/.default"):
         self.tenant = tenant
         self.client_id = client_id
         self.client_secret = client_secret
