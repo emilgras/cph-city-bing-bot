@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from typing import Any
+
 import json
 import logging
 import re
@@ -11,6 +14,7 @@ from ..config import Config
 from ..dateutil_dk import labels_next_7_days
 from .agents_client import create_thread, post_message, run_thread, poll_run, get_messages
 
+DA_DAYS = ["Man","Tir","Ons","Tor","Fre","Lør","Søn"]  # 0=Mon..6=Sun
 
 # --- Logging setup -----------------------------------------------------------
 
@@ -23,6 +27,16 @@ logger = logging.getLogger(LOGGER_NAME)
 #     format="%(asctime)s %(levelname)s %(name)s [corr=%(correlation_id)s] %(message)s",
 # )
 
+def labels_with_dates(now: datetime) -> list[str]:
+    """Returner labels for de næste 7 dage (ugedag + dato)."""
+    return [
+        f"{DA_DAYS[(now.weekday() + i) % 7]} {(now + timedelta(days=i)).strftime('%d/%m')}"
+        for i in range(7)
+    ]
+
+def labels_without_dates(now: datetime) -> list[str]:
+    """Returner labels for de næste 7 dage (kun ugedag)."""
+    return [DA_DAYS[(now.weekday() + i) % 7] for i in range(7)]
 
 class _ContextFilter(logging.Filter):
     """Inject correlation_id into all log records (fallback: '-')."""
@@ -207,7 +221,7 @@ async def run_thread_with_retry(
 async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[dict], list[dict], str]:
     """
     One Agent call via Foundry (threads/runs).
-    Strict: forecast must cover today→Sunday.
+    Strict: forecast must cover today→+6 dage.
     Adds detailed logging with correlation id, timings, and statuses.
     """
     correlation_id = uuid.uuid4().hex[:8]
@@ -218,7 +232,8 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
     log.info("Start find_intro_weather_events")
 
     now = datetime.now(tz=Config.tz)
-    labels = labels_next_7_days(now)
+    labels_prompt = labels_with_dates(now)      # til AI
+    labels_sms = labels_without_dates(now)      # til SMS
     prefs = Config.event_preferences
 
     if welcome:
@@ -235,7 +250,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             "Du må browse nettet.\n"
             "Opgave: Generér alt indhold til en kort dansk SMS for en vennegruppe i København.\n"
             f"1) Skriv ÉN varm, uformel intro (15–25 ord, gerne med lidt humor eller en kærlig stikpille til vennerne).\n"
-            f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels)}. "
+            f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels_prompt)}. "
             "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
             f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
             "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
@@ -244,7 +259,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             "Svar KUN som gyldig JSON i dette skema:\n"
             "{\n"
             "  \"intro\": \"...\",\n"
-            "  \"forecast\": [ {\"label\":\"Man\",\"icon\":\"☀️\",\"tmax\":22}, ... ],\n"
+            "  \"forecast\": [ {\"label\":\"Man 01/09\",\"icon\":\"☀️\",\"tmax\":22}, ... ],\n"
             "  \"events\":   [ {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}, ... ],\n"
             "  \"signoff\":  \"...\"\n"
             "}\n"
@@ -261,7 +276,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
     await post_message(thread_id, "user", prompt)
     log.info("User message posted (%.3fs)", time.perf_counter() - t)
 
-    # 3) Run the thread (med retry/backoff ved ratelimit)
+    # 3) Run the thread
     t = time.perf_counter()
     run_state = await run_thread_with_retry(thread_id, log=log)
     log.info("Run finished with status=%s (%.3fs)", run_state.get("status"), time.perf_counter() - t)
@@ -290,9 +305,9 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
     intro = (data.get("intro") or "").strip()
     signoff = (data.get("signoff") or "— din Københavner-bot ☁️").strip()
 
-    want = labels
+    want = labels_prompt
     seen = set()
-    forecast: list[dict] = []
+    forecast_ai: list[dict] = []
     for d in (data.get("forecast") or []):
         lab = str(d.get("label", "")).strip()
         if lab in want and lab not in seen:
@@ -302,15 +317,24 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             except Exception as ex:
                 log.exception("tmax parse error on %r", d)
                 raise AgentDataError("tmax is not an integer") from ex
-            forecast.append({"label": lab, "icon": icon, "tmax": tmax})
+            forecast_ai.append({"label": lab, "icon": icon, "tmax": tmax})
             seen.add(lab)
         else:
             log.debug("Skipping forecast entry (unexpected/duplicate): %r", d)
 
-    if len(forecast) != len(want):
+    if len(forecast_ai) != len(want):
         missing = [lab for lab in want if lab not in seen]
-        log.error("Forecast incomplete. Missing: %s | Got: %s", missing, [f["label"] for f in forecast])
+        log.error("Forecast incomplete. Missing: %s | Got: %s", missing, [f["label"] for f in forecast_ai])
         raise AgentDataError(f"Forecast incomplete: missing {missing}")
+
+    # Post-process forecast → erstat labels med kun ugedag (uden dato) til SMS
+    forecast_sms: list[dict] = []
+    for idx, d in enumerate(forecast_ai):
+        forecast_sms.append({
+            "label": labels_sms[idx],
+            "icon": d["icon"],
+            "tmax": d["tmax"]
+        })
 
     events: list[dict] = []
     for e in (data.get("events") or [])[:5]:
@@ -325,10 +349,10 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
     log.info(
         "Success: intro=%s chars, forecast=%d, events=%d, signoff=%s chars (total %.3fs)",
         len(intro),
-        len(forecast),
+        len(forecast_sms),
         len(events),
         len(signoff),
         time.perf_counter() - t0,
     )
 
-    return intro, forecast, events, signoff
+    return intro, forecast_sms, events, signoff
