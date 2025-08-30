@@ -58,12 +58,7 @@ def _safe_json_loads(s: str) -> dict:
     except Exception:
         return {}
 
-
-def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) -> dict:
-    """Find seneste assistant-besked og parse JSON – robust mod nested shapes."""
-    log.debug("Extracting JSON from messages: %d message(s)", len(msgs))
-
-    def _flatten_text(obj) -> str:
+def _flatten_text(obj) -> str:
         # Recursively collect all string-like bits from API "content" structures
         if obj is None:
             return ""
@@ -89,6 +84,11 @@ def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) ->
             return "".join(_flatten_text(x) for x in obj.values())
         # Fallback: stringize
         return str(obj)
+
+
+def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) -> dict:
+    """Find seneste assistant-besked og parse JSON – robust mod nested shapes."""
+    log.debug("Extracting JSON from messages: %d message(s)", len(msgs))
 
     assistant_msgs = [m for m in msgs if m.get("role") == "assistant"]
     if not assistant_msgs:
@@ -204,7 +204,7 @@ async def run_thread_with_retry(
 
 # --- Main flow ---------------------------------------------------------------
 
-async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]:
+async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[dict], list[dict], str]:
     """
     One Agent call via Foundry (threads/runs).
     Strict: forecast must cover today→Sunday.
@@ -221,24 +221,34 @@ async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]
     labels = labels_until_next_sunday(now)
     prefs = Config.event_preferences
 
-    prompt = (
-        "Du må browse nettet.\n"
-        "Opgave: Generér alt indhold til en kort dansk SMS for en vennegruppe i København.\n"
-        f"1) Skriv ÉN varm, uformel intro (15–25 ord).\n"
-        f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels)}. "
-        "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
-        f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
-        "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
-        "4) Lav en kort sign-off (én sætning), hyggelig og neutral.\n\n"
-        "Svar KUN som gyldig JSON i dette skema:\n"
-        "{\n"
-        "  \"intro\": \"...\",\n"
-        "  \"forecast\": [ {\"label\":\"Man\",\"icon\":\"☀️\",\"tmax\":22}, ... ],\n"
-        "  \"events\":   [ {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}, ... ],\n"
-        "  \"signoff\":  \"...\"\n"
-        "}\n"
-        "Ingen forklaringer, ingen markdown – KUN JSON."
-    )
+    if welcome:
+        # Enkel prompt kun til velkomst
+        prompt = (
+            "Skriv en kort, varm og uformel velkomstbesked på dansk til en vennegruppe i København.\n"
+            "Forklar at du er deres nye *Cph City Ping Bot* 🤖, at du kan finde vejrudsigt og events,\n"
+            "og at du sender hyggelige forslag ca. ugentligt for at hjælpe dem med at mødes.\n"
+            "Maks 480 tegn. Ingen JSON, bare ren tekst."
+        )
+    else:
+        # Fuld JSON prompt
+        prompt = (
+            "Du må browse nettet.\n"
+            "Opgave: Generér alt indhold til en kort dansk SMS for en vennegruppe i København.\n"
+            f"1) Skriv ÉN varm, uformel intro (15–25 ord).\n"
+            f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels)}. "
+            "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
+            f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
+            "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
+            "4) Lav en kort sign-off (én sætning), hyggelig og neutral.\n\n"
+            "Svar KUN som gyldig JSON i dette skema:\n"
+            "{\n"
+            "  \"intro\": \"...\",\n"
+            "  \"forecast\": [ {\"label\":\"Man\",\"icon\":\"☀️\",\"tmax\":22}, ... ],\n"
+            "  \"events\":   [ {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}, ... ],\n"
+            "  \"signoff\":  \"...\"\n"
+            "}\n"
+            "Ingen forklaringer, ingen markdown – KUN JSON."
+        )
 
     # 1) Create thread
     t = time.perf_counter()
@@ -263,6 +273,12 @@ async def find_intro_weather_events() -> tuple[str, list[dict], list[dict], str]
     t = time.perf_counter()
     msgs = await get_messages(thread_id)
     log.info("Fetched %d message(s) (%.3fs)", len(msgs or []), time.perf_counter() - t)
+
+    if welcome:
+        # Returnér velkomsttekst som "intro", resten tomt
+        text = _flatten_text(msgs[0].get("content")) if msgs else ""
+        welcome_text = (text or "").strip()
+        return welcome_text, [], [], "— din Københavner-bot ☁️"
 
     # 5) Parse JSON
     data = _extract_json_from_messages(msgs or [], log) or {}

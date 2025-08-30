@@ -68,9 +68,9 @@ def test_redis() -> None:
 
 # -------------------- agent flow --------------------
 
-async def test_agent() -> tuple[str, list[dict], list[dict], str]:
+async def test_agent(welcome: bool = False) -> tuple[str, list[dict], list[dict], str]:
     print("\n[AGENT] calling threads/runs …")
-    intro, forecast, events, signoff = await find_intro_weather_events()
+    intro, forecast, events, signoff = await find_intro_weather_events(welcome=welcome)
     print("[AGENT] intro:", (intro or "")[:80])
     print("[AGENT] forecast count:", len(forecast or []))
     print("[AGENT] events count:", len(events or []))
@@ -119,7 +119,7 @@ def main() -> int:
         return 1
 
     try:
-        intro, fc, ev, signoff = asyncio.run(test_agent())
+        intro, fc, ev, signoff = asyncio.run(test_agent(args.welcome))
     except AgentDataError as e:
         msg = str(e)
         print("[AGENT] FAILED:", msg)
