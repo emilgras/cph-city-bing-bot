@@ -296,8 +296,8 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
         text = _flatten_text(msgs[0].get("content")) if msgs else ""
         welcome_text = (text or "").strip()
         # fjern evt. "text " i starten
-        if welcome_text.lower().startswith("text "):
-            welcome_text = welcome_text[5:].strip()
+        if welcome_text.lower().startswith("text"):
+            welcome_text = welcome_text[4:].strip()
         return welcome_text, [], [], "— din Københavner-bot ☁️"
 
     # 5) Parse JSON
