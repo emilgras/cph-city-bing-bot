@@ -3,13 +3,9 @@ from datetime import datetime, timedelta
 
 DA_DAYS = ["Man","Tir","Ons","Tor","Fre","Lør","Søn"]  # 0=Mon..6=Sun
 
-def labels_until_next_sunday(now: datetime) -> list[str]:
-    """Return labels from today to next Sunday (inclusive).
-    If today is Sunday, return 7 labels (Sun..Sun)."""
-    dow = now.weekday()  # 0=Mon..6=Sun
-    dist = (6 - dow) if dow != 6 else 7
-    days = []
-    for i in range(dist + 1):
-        d = now + timedelta(days=i)
-        days.append(DA_DAYS[d.weekday()])
-    return days
+def labels_next_7_days(now: datetime) -> list[str]:
+    """Returner labels for de næste 7 dage startende i dag (inkl. dato)."""
+    return [
+        f"{DA_DAYS[(now.weekday() + i) % 7]} { (now + timedelta(days=i)).strftime('%d/%m') }"
+        for i in range(7)
+    ]
