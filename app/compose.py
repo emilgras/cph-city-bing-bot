@@ -17,7 +17,7 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
             f"{intro}\n\n"
             "PS: Om lidt sender jeg mit første forslag 😉\n\n"
             f"{signoff or 'Glæder mig til at ping’e jer!'}\n\n"
-            "Ingen svar nødvendig."
+            "Ingen svar nødvendig.\n\n"
             f"{footer}"
         )
 
@@ -32,7 +32,7 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
         lines.append(f"• {s['title']} ({s['where']})")
 
     lines.append(f"\n{signoff or 'Vi ses i byen!'}")
-    lines.append("Ingen svar nødvendig.")
+    lines.append("Ingen svar nødvendig.\n\n")
     lines.append(footer)
 
     return "\n".join(lines)
