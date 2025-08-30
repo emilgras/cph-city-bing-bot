@@ -252,7 +252,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             f"1) Skriv ÉN varm, uformel intro (10–20 ord, gerne med lidt humor eller en kærlig stikpille til vennerne).\n"
             f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels_prompt)}. "
             "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
-            f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
+            f"3) Find 6 aktuelle events i København denne uge. Prioritér: {prefs}. "
             "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
             "(titler må gerne lyde fristende eller lidt fjollede)\n"
             "4) Lav en kort sign-off (én sætning), inkl. no-reply, hyggelig, neutral – men med et glimt i øjet.\n\n"

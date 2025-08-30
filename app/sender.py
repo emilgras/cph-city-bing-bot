@@ -19,7 +19,7 @@ def send_sms(body: str):
             continue
 
         # Send the SMS
-        msg = client.messages.create(to=to, from_=_cfg.twilio_from, body=body, media_url=["https://demo.twilio.com/owl.png"])
+        msg = client.messages.create(to=to, from_=_cfg.twilio_from, body=body, media_url=["https://d2cbg94ubxgsnp.cloudfront.net/Pictures/2000xAny/9/9/2/512992_shutterstock_715962319converted_749269.png"])
         print(f"[SMS] sent to {to} sid={msg.sid} initial_status={msg.status}")
 
         # Wait a few seconds and fetch the status from Twilio
