@@ -9,7 +9,7 @@ from .sender import send_sms
 
 def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str, welcome=False) -> str:
     footer = (
-        "\n\n— Din Københavner-bot 🤖\n\n"
+        "\n\n— Din Københavner-bot 🤖\n\n\n\n"
         "      Made with ❤️ by Emil Gräs"
     )
 
@@ -17,7 +17,7 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
         return (
             f"{intro}\n\n"
             "PS: Om lidt sender jeg mit første forslag 😉\n\n"
-            f"{signoff or 'Glæder mig til at ping’e jer!'}\n\n"
+            # f"{signoff or 'Glæder mig til at ping’e jer!'}\n\n"
             "Ingen svar nødvendig."
             f"{footer}"
         )
