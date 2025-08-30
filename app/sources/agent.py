@@ -249,7 +249,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
         prompt = (
             "Du må browse nettet.\n"
             "Opgave: Generér alt indhold til en kort dansk SMS for en vennegruppe i København.\n"
-            f"1) Skriv ÉN varm, uformel intro (15–25 ord, gerne med lidt humor eller en kærlig stikpille til vennerne).\n"
+            f"1) Skriv ÉN varm, uformel intro (10–20 ord, gerne med lidt humor eller en kærlig stikpille til vennerne).\n"
             f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels_prompt)}. "
             "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
             f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
