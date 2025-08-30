@@ -243,7 +243,8 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             "Skriv en kort, varm og uformel velkomsthilsen på dansk til en vennegruppe i København.\n"
             "Fortæl at du er deres nye Cph City Ping Bot 🤖, at du kan fiske fede events frem i byen,\n"
             "og at du ca. hver eller hveranden uge dumper et hyggeligt forslag i tråden, så de får en god grund til at ses.\n"
-            "Hold det legende og chill i tonen. Max 320 tegn. Kun ren tekst – ingen JSON."
+            "Hold det legende og chill i tonen. Max 320 tegn. Kun ren tekst – ingen JSON.\n"
+            "Svar kun med selve beskeden som ren tekst – skriv ikke 'text:' eller andre labels foran."
         )
     else:
         # Fuld JSON prompt

@@ -9,15 +9,14 @@ from .sender import send_sms
 
 def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str, welcome=False) -> str:
     footer = (
-        "\n\n— Din Københavner-bot 🤖\n\n\n\n"
-        "      Made with ❤️ by Emil Gräs"
+        "Made with ❤️ by Emil Gräs"
     )
 
     if welcome and intro:
         return (
             f"{intro}\n\n"
             "PS: Om lidt sender jeg mit første forslag 😉\n\n"
-            # f"{signoff or 'Glæder mig til at ping’e jer!'}\n\n"
+            f"{signoff or 'Glæder mig til at ping’e jer!'}\n\n"
             "Ingen svar nødvendig."
             f"{footer}"
         )
@@ -27,11 +26,13 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
         lines.append(f"{d['icon']} {d['label']}: {d['tmax']}°")
 
     lines.append("\nForslag:")
-    for s in ideas[:5]:
+    for idx, s in enumerate(ideas[:5]):
+        if idx > 0:
+            lines.append("")  # indsæt blank linje kun mellem events
         lines.append(f"• {s['title']} ({s['where']})")
 
     lines.append(f"\n{signoff or 'Vi ses i byen!'}")
-    lines.append("Ingen svar nødvendig. Skriv STOP for at framelde.")
+    lines.append("Ingen svar nødvendig.")
     lines.append(footer)
 
     return "\n".join(lines)
