@@ -224,22 +224,23 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
     if welcome:
         # Enkel prompt kun til velkomst
         prompt = (
-            "Skriv en kort, varm og uformel velkomstbesked på dansk til en vennegruppe i København.\n"
-            "Forklar at du er deres nye *Cph City Ping Bot* 🤖, at du kan finde vejrudsigt og events,\n"
-            "og at du sender hyggelige forslag ca. ugentligt for at hjælpe dem med at mødes.\n"
-            "Maks 480 tegn. Ingen JSON, bare ren tekst."
+            "Skriv en kort, varm og uformel velkomsthilsen på dansk til en vennegruppe i København.\n"
+            "Fortæl at du er deres nye Cph City Ping Bot 🤖, at du kan fiske fede events frem i byen,\n"
+            "og at du ca. hver eller hveranden uge dumper et hyggeligt forslag i tråden, så de får en god grund til at ses.\n"
+            "Hold det legende og chill i tonen. Max 480 tegn. Kun ren tekst – ingen JSON."
         )
     else:
         # Fuld JSON prompt
         prompt = (
             "Du må browse nettet.\n"
             "Opgave: Generér alt indhold til en kort dansk SMS for en vennegruppe i København.\n"
-            f"1) Skriv ÉN varm, uformel intro (15–25 ord).\n"
+            f"1) Skriv ÉN varm, uformel intro (15–25 ord, gerne med lidt humor eller en kærlig stikpille til vennerne).\n"
             f"2) Lav vejrskitse for København KUN for disse dage i rækkefølge: {', '.join(labels)}. "
             "Format pr. element: {\"label\":\"<Dag>\", \"icon\":\"EMOJI\", \"tmax\":<heltal>} (brug danske ugedage).\n"
             f"3) Find 5 aktuelle events i København denne uge. Prioritér: {prefs}. "
             "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
-            "4) Lav en kort sign-off (én sætning), hyggelig og neutral.\n\n"
+            "(titler må gerne lyde fristende eller lidt fjollede)\n"
+            "4) Lav en kort sign-off (én sætning), hyggelig, neutral – men med et glimt i øjet.\n\n"
             "Svar KUN som gyldig JSON i dette skema:\n"
             "{\n"
             "  \"intro\": \"...\",\n"
