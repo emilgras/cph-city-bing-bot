@@ -7,17 +7,16 @@ from .sources.agent import find_intro_weather_events, AgentDataError
 from .sources.evergreen import EVERGREEN, pick_by_weather
 from .sender import send_sms
 
-MAX_CHARS = 480
-
 def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str, welcome=False) -> str:
     if welcome and intro:
-        text = (
-            f"{intro}\n"
-            "\nPS: Om lidt sender jeg mit første forslag 😉\n\n"
+        return (
+            f"{intro}\n\n"
+            "PS: Om lidt sender jeg mit første forslag 😉\n\n"
             f"{signoff}\n\n"
-            "Ingen svar nødvendig. Skriv STOP for at framelde."
+            "Ingen svar nødvendig.\n\n"
+            "\n— ☁️ din Københavner-bot\n\n"
+            "   Made with ❤️ by Emil Gräs"
         )
-        return text[:MAX_CHARS]
 
     lines = [intro or "Hej bande! Skal vi finde på noget snart? 😊", "", "Vejret:"]
     for d in forecast:
@@ -29,7 +28,7 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
 
     lines.append(f"\n{signoff or '— din Københavner-bot ☁️'}")
     lines.append("Ingen svar nødvendig. Skriv STOP for at framelde.")
-    return "\n".join(lines)[:MAX_CHARS]
+    return "\n".join(lines)
 
 async def build_message(welcome=False):
     intro, forecast, events, signoff = await find_intro_weather_events(welcome=welcome)
