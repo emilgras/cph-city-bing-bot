@@ -341,7 +341,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
         })
 
     events: list[dict] = []
-    for e in (data.get("events") or [])[:5]:
+    for e in (data.get("events") or []):
         title = (e.get("title") or "").strip()
         where = (e.get("where") or "City").strip()
         if title:

@@ -31,8 +31,8 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
             lines.append("")  # indsæt blank linje kun mellem events
         lines.append(f"• {s['title']} ({s['where']})")
 
-    lines.append(f"\n{signoff or 'Vi ses i byen!'}")
-    lines.append("Ingen svar nødvendig.\n\n")
+    lines.append(f"\n{signoff or 'Vi ses i byen!'}\n")
+    lines.append("Ingen svar nødvendig.\n")
     lines.append(footer)
 
     return "\n".join(lines)
