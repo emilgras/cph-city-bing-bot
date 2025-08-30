@@ -73,31 +73,32 @@ def _safe_json_loads(s: str) -> dict:
         return {}
 
 def _flatten_text(obj) -> str:
-        # Recursively collect all string-like bits from API "content" structures
-        if obj is None:
-            return ""
-        if isinstance(obj, str):
-            return obj
-        if isinstance(obj, (int, float, bool)):
-            return str(obj)
-        if isinstance(obj, list):
-            return "".join(_flatten_text(x) for x in obj)
-        if isinstance(obj, dict):
-            # Prefer common keys first
-            for k in ("text", "value", "input_text"):
-                v = obj.get(k)
-                if isinstance(v, str):
-                    return v
-            # If "content" is a list (common in many APIs), flatten it
-            v = obj.get("content")
-            if isinstance(v, list):
-                return "".join(_flatten_text(x) for x in v)
-            if isinstance(v, str):
-                return v
-            # Generic fallback: flatten all values
-            return "".join(_flatten_text(x) for x in obj.values())
-        # Fallback: stringize
+    """Recursively collect string-like content from Foundry message objects."""
+    if obj is None:
+        return ""
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, (int, float, bool)):
         return str(obj)
+    if isinstance(obj, list):
+        return "".join(_flatten_text(x) for x in obj)
+    if isinstance(obj, dict):
+        # Foundry bruger ofte {"type": "text", "text": "..."}
+        if "text" in obj and isinstance(obj["text"], str):
+            return obj["text"]
+        if "value" in obj and isinstance(obj["value"], str):
+            return obj["value"]
+        if "input_text" in obj and isinstance(obj["input_text"], str):
+            return obj["input_text"]
+
+        v = obj.get("content")
+        if isinstance(v, list):
+            return "".join(_flatten_text(x) for x in v)
+        if isinstance(v, str):
+            return v
+        return "".join(_flatten_text(x) for x in obj.values())
+
+    return str(obj)
 
 
 def _extract_json_from_messages(msgs: list[dict], log: logging.LoggerAdapter) -> dict:
@@ -255,7 +256,7 @@ async def find_intro_weather_events(welcome: bool = False) -> tuple[str, list[di
             f"3) Find 6 aktuelle events i København denne uge. Prioritér: {prefs}. "
             "Format pr. event: {\"title\":\"…\",\"where\":\"…\",\"kind\":\"event\"}.\n"
             "(titler må gerne lyde fristende eller lidt fjollede)\n"
-            "4) Lav en kort sign-off (én sætning), inkl. no-reply, hyggelig, neutral – men med et glimt i øjet.\n\n"
+            "4) Lav en kort sign-off (én sætning), hyggelig, neutral – men med et glimt i øjet.\n\n"
             "Svar KUN som gyldig JSON i dette skema:\n"
             "{\n"
             "  \"intro\": \"...\",\n"

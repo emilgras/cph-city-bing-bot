@@ -13,8 +13,8 @@ def format_sms(intro: str, forecast: list[dict], ideas: list[dict], signoff: str
     if welcome and intro:
         text = (
             f"{intro}\n"
-            "PS: Om lidt sender jeg mit første forslag 😉\n"
-            f"{signoff}\n"
+            "\nPS: Om lidt sender jeg mit første forslag 😉\n\n"
+            f"{signoff}\n\n"
             "Ingen svar nødvendig. Skriv STOP for at framelde."
         )
         return text[:MAX_CHARS]
